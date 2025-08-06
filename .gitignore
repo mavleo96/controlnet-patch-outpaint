@@ -4,6 +4,7 @@ training/
 lightning_logs/
 image_log/
 wandb_logs/
+logs/
 results/
 
 *.pth
