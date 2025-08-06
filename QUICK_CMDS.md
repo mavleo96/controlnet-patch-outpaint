@@ -31,6 +31,17 @@ python ./scripts/create_coco_dataset.py --root /home/vmurugan/projects/controlne
 python ./scripts/create_coco_dataset.py --root /home/vmurugan/projects/controlnet-patch-outpaint/datasets --split val --output_dir outpaint
 ```
 
+## Prepare Checkpoint (ControlNet)
+```
+# Local
+wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt
+python tool_add_control.py /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt /data/vmurugan/patch-out-painting/checkpoints/control_sd15_ini.ckpt
+
+# Slurm
+wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt
+python tool_add_control.py /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/control_sd15_ini.ckpt
+```
+
 ## Train
 ```
 # Local
