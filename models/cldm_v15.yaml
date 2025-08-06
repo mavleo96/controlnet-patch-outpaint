@@ -17,6 +17,10 @@ model:
     scale_factor: 0.18215
     use_ema: False
     only_mid_control: False
+    ucg_training:
+      txt:
+        p: 0.5
+        val: ""
 
     control_stage_config:
       target: cldm.cldm.ControlNet

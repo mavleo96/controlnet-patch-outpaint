@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --job-name=controlnet-patch-outpaint.job
+#SBATCH --output=/home/vmurugan/projects/controlnet-patch-outpaint/train_out.txt
+#SBATCH --error=/home/vmurugan/projects/controlnet-patch-outpaint/train_err.txt
+#SBATCH --time=4-00:00
+#SBATCH --mem=100000
+#SBATCH --gres=gpu:8
+
+# Test nvidia-smi
+nvidia-smi
+
+# Activate conda environment
+source activate control
+
+# Set wandb API key to avoid manual login
+export WANDB_API_KEY=
+
+# Run training script
+/home/vmurugan/miniconda3/envs/control/bin/python /home/vmurugan/projects/controlnet-patch-outpaint/train.py \
+    --root /home/vmurugan/projects/controlnet-patch-outpaint \
+    --data_root /home/vmurugan/projects/controlnet-patch-outpaint \
+    --dataset_dir datasets/outpaint \
+    --checkpoints_dir checkpoints \
+    --model_path models/cldm_v15.yaml \
+    --resume_ckpt control_sd15_ini.ckpt \
+    --max_steps 50000 \
+    --batch_size 16 \
+    --accumulate_grad_batches 4 \
+    --wandb_name single-control-only
