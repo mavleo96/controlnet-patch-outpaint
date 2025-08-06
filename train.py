@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=1e-5)
+    parser.add_argument('--precision', type=str, default='bf16')
     parser.add_argument('--sd_locked', type=bool, default=True)
     parser.add_argument('--only_mid_control', type=bool, default=False)
     # Wandb
@@ -46,6 +47,7 @@ def main():
     batch_size = args.batch_size
     accumulate_grad_batches = args.accumulate_grad_batches
     learning_rate = args.learning_rate
+    precision = args.precision if args.precision == 'bf16' else int(args.precision)
     sd_locked = args.sd_locked
     only_mid_control = args.only_mid_control
     
@@ -72,7 +74,7 @@ def main():
         dirpath=checkpoints_dir,
         filename='controlnet-patch-outpaint-{step}',
         save_top_k=-1,
-        every_n_train_steps=2000,
+        every_n_train_steps=10000,
     )
     
     # Initialize wandb logger
@@ -95,15 +97,13 @@ def main():
         'img_logger_freq': 1000 * accumulate_grad_batches,
         'max_steps': max_steps,
         'accumulate_grad_batches': accumulate_grad_batches,
-        'precision': 'bf16'
+        'precision': precision
     })
 
-    # trainer = pl.Trainer(gpus=1, precision=32, callbacks=[logger])
-
     trainer = pl.Trainer(
-        devices=[1],
+        devices="auto",
         accelerator="gpu",
-        precision="bf16",
+        precision=precision,
         accumulate_grad_batches=accumulate_grad_batches,
         max_steps=max_steps,
         callbacks=[image_logger, model_checkpoint1, model_checkpoint2],

@@ -55,6 +55,7 @@ python train.py \
     --max_steps 100 \
     --batch_size 1 \
     --accumulate_grad_batches 2 \
+    --precision 16 \
     --wandb_name test-run
 
 # Slurm
@@ -68,6 +69,7 @@ python train.py \
     --max_steps 50000 \
     --batch_size 16 \
     --accumulate_grad_batches 4 \
+    --precision 16 \
     --wandb_name single-control-only
 ```
 

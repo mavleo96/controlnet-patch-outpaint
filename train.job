@@ -3,8 +3,8 @@
 #SBATCH --output=/home/vmurugan/projects/controlnet-patch-outpaint/train_out.txt
 #SBATCH --error=/home/vmurugan/projects/controlnet-patch-outpaint/train_err.txt
 #SBATCH --time=4-00:00
-#SBATCH --mem=100000
-#SBATCH --gres=gpu:8
+#SBATCH --mem=50000
+#SBATCH --gres=gpu:4
 
 # Test nvidia-smi
 nvidia-smi
@@ -24,6 +24,7 @@ export WANDB_API_KEY=
     --model_path models/cldm_v15.yaml \
     --resume_ckpt control_sd15_ini.ckpt \
     --max_steps 50000 \
-    --batch_size 16 \
-    --accumulate_grad_batches 4 \
+    --batch_size 8 \
+    --accumulate_grad_batches 8 \
+    --precision 16 \
     --wandb_name single-control-only
