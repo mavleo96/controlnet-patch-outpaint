@@ -35,11 +35,17 @@ python ./scripts/create_coco_dataset.py --root /home/vmurugan/projects/controlne
 ```
 # Local
 wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt
-python tool_add_control.py /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt /data/vmurugan/patch-out-painting/checkpoints/control_sd15_ini.ckpt
+python tool_add_control.py \
+    --input_path /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt \
+    --output_path /data/vmurugan/patch-out-painting/checkpoints/control_sd15_ini.ckpt \
+    --model_path models/cldm_v15.yaml
 
 # Slurm
 wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt
-python tool_add_control.py /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/control_sd15_ini.ckpt
+python tool_add_control.py \
+    --input_path /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt \
+    --output_path /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/control_sd15_ini.ckpt \
+    --model_path models/cldm_v15.yaml
 ```
 
 ## Train
