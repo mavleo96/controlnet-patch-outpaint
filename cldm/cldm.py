@@ -9,6 +9,7 @@ from ldm.modules.diffusionmodules.util import (
     zero_module,
     timestep_embedding,
 )
+from cldm.dinov2 import DinoV2Model
 
 from einops import rearrange, repeat
 from torchvision.utils import make_grid
@@ -303,6 +304,42 @@ class ControlNet(nn.Module):
         outs.append(self.middle_block_out(h, emb, context))
 
         return outs
+
+class ControlNetDinoV2(ControlNet):
+    def __init__(self, dinov2_model_name="facebook/dinov2-small", freeze_dinov2_weights=True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # check if all required keys are present
+        check_keys = set(["dims", "model_channels", "image_size"])
+        if not check_keys.issubset(kwargs.keys()):
+            raise ValueError(f"Missing required keys: {check_keys}")
+
+        image_size = kwargs["image_size"]
+        dims = kwargs["dims"]
+        model_channels = kwargs["model_channels"]
+
+        self.dinov2_model_name = dinov2_model_name
+        self.freeze_dinov2_weights = freeze_dinov2_weights
+
+        # create dinov2 model
+        dinov2_model = DinoV2Model(model_name=self.dinov2_model_name, size=(image_size, image_size))
+        if self.freeze_dinov2_weights:
+            dinov2_model.requires_grad_(False)
+
+        in_channels = {
+            "facebook/dinov2-small": 384,
+            "facebook/dinov2-base": 768,
+            "facebook/dinov2-large": 1024,
+            "facebook/dinov2-huge": 1536,
+        }[self.dinov2_model_name]
+
+        # input_hint_block created in super().__init__() is overridden here
+        # This block is a dinov2 model passed through a silu activation and a 1x1 zero-weight conv layer
+        self.input_hint_block = TimestepEmbedSequential(
+            dinov2_model,
+            nn.SiLU(),
+            zero_module(conv_nd(dims=dims, in_channels=in_channels, out_channels=model_channels, kernel_size=1)),
+        )
 
 
 class ControlLDM(LatentDiffusion):
