@@ -34,10 +34,10 @@ python ./scripts/create_coco_dataset.py --root /home/vmurugan/projects/controlne
 ## Prepare Checkpoint (ControlNet)
 ```
 # Local
-wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt
+wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /data/vmurugan/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt
 python tool_add_control.py \
-    --input_path /data/vmurugan/patch-out-painting/checkpoints/v1-5-pruned.ckpt \
-    --output_path /data/vmurugan/patch-out-painting/checkpoints/control_sd15_ini.ckpt \
+    --input_path /data/vmurugan/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt \
+    --output_path /data/vmurugan/controlnet-patch-outpaint/checkpoints/control_sd15_ini.ckpt \
     --model_path models/cldm_v15.yaml
 
 # Slurm
@@ -55,7 +55,7 @@ python train.py \
     --root /home/vmurugan/ControlNet \
     --data_root /data/vmurugan \
     --dataset_dir datasets/outpaint \
-    --checkpoints_dir patch-out-painting/checkpoints \
+    --checkpoints_dir controlnet-patch-outpaint/checkpoints \
     --model_path models/cldm_v15.yaml \
     --resume_ckpt control_sd15_ini.ckpt \
     --max_steps 100 \
@@ -79,4 +79,14 @@ python train.py \
     --wandb_name single-control-only
 ```
 
-
+# Inference
+```
+python inference.py \
+    --dataset_path '/data/vmurugan/datasets/outpaint/val' \
+    --model_path 'models/cldm_v15.yaml' \
+    --checkpoint_path '/data/vmurugan/controlnet-patch-outpaint/checkpoints/controlnet-patch-outpaint-continue-last-step=23999.ckpt' \
+    --device 'cuda:0' \
+    --n_samples 10 \
+    --batch_size 1 \
+    --output_path 'results/grid_10_bs64_e42999.png'
+```
