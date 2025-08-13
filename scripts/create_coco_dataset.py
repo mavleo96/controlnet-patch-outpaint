@@ -5,71 +5,53 @@ import numpy as np
 import cv2
 from PIL import Image
 from pycocotools.coco import COCO
+from torchvision import transforms
+from tqdm import tqdm
 
 RESOLUTION = (512, 512)
 MAX_PATCHES = 50
 BLUR_SIGMA = (5, 40)
 PATCH_FRAC = 0.1
 
-# def create_patched_image(img, patch_frac, locations):
-#     img_array = np.array(img)
-#     H, W, _ = img_array.shape
-    
-#     patched_image = np.zeros_like(img_array)
-#     patch_radius = int(max(H, W) * patch_frac) // 2
 
-#     for center_y, center_x in locations:
-#         y1 = max(center_y - patch_radius, 0)
-#         y2 = min(center_y + patch_radius, H)
-#         x1 = max(center_x - patch_radius, 0)
-#         x2 = min(center_x + patch_radius, W)
-
-#         patched_image[y1:y2, x1:x2] = img_array[y1:y2, x1:x2]
-
-#     return Image.fromarray(patched_image.astype(np.uint8))
-
-
-def create_patched_image_with_blur(img, patch_frac, locations, sigma):
-    img_array = np.array(img)
-    H, W, _ = img_array.shape
-    
+def create_mask(img_size, patch_count, patch_frac):
+    img_array = np.zeros(img_size)
+    H, W = img_size
     patch_radius = int(max(H, W) * patch_frac) // 2
+    
+    for _ in range(patch_count):
+        center_y = np.random.randint(patch_radius, H - patch_radius)
+        center_x = np.random.randint(patch_radius, W - patch_radius)
+        img_array[center_y - patch_radius:center_y + patch_radius, center_x - patch_radius:center_x + patch_radius] = 255
 
-    # Apply Gaussian blur to the entire image
+    return Image.fromarray(img_array.astype(np.uint8))
+
+
+def create_gaussian_blurred_image(img, sigma):
+    img_array = np.array(img)
     blurred_array = cv2.GaussianBlur(img_array, ksize=(0, 0), sigmaX=sigma)
-
-    # Apply patches from original image
-    for center_y, center_x in locations:
-        y1 = max(center_y - patch_radius, 0)
-        y2 = min(center_y + patch_radius, H)
-        x1 = max(center_x - patch_radius, 0)
-        x2 = min(center_x + patch_radius, W)
-        blurred_array[y1:y2, x1:x2] = img_array[y1:y2, x1:x2]
 
     return Image.fromarray(blurred_array.astype(np.uint8))
 
-def resize_image(img, resolution):
-    img_array = np.array(img)
-    H, W, _ = img_array.shape
 
-    # Resize
-    scale = max(resolution[0] / H, resolution[1] / W)
-    scale = np.ceil(scale * 100) / 100 # round up to ensure resolution is off by few pixels
-    new_H, new_W = int(H * scale), int(W * scale)
-    resized_array = cv2.resize(img_array, (new_W, new_H), interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
+def combine_control(target_img, mask, blurred_img):
+    target_array = np.array(target_img)
+    mask_array = np.array(mask)[:, :, np.newaxis] / 255.0
+    blurred_array = np.array(blurred_img)
 
-    # Crop to resolution (center crop)
-    start_h, start_w = (new_H - resolution[0]) // 2, (new_W - resolution[1]) // 2
-    cropped_array = resized_array[start_h:start_h+resolution[0], start_w:start_w+resolution[1]]
-    assert cropped_array.shape[:2] == resolution
+    assert target_array.shape == blurred_array.shape
+    assert mask_array.shape == (*target_array.shape[:2], 1)
 
-    return Image.fromarray(cropped_array.astype(np.uint8))
+    combined_array = target_array * mask_array + blurred_array * (1 - mask_array)
+    return Image.fromarray(combined_array.astype(np.uint8))
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=str, default='/data/vmurugan/datasets')
     parser.add_argument('--split', type=str, choices=['train', 'val'], default='train')
     parser.add_argument('--output_dir', type=str, default='outpaint')
+    parser.add_argument('--combine_control', action='store_true')
+    parser.add_argument('--save_mask', action='store_true')
     args = parser.parse_args()
 
     # Initialize COCO API for captions
@@ -83,16 +65,22 @@ def main():
     output_dir = os.path.join(args.root, args.output_dir, args.split)
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'target'), exist_ok=True)
-    # os.makedirs(os.path.join(output_dir, 'patched'), exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'source'), exist_ok=True)
+    if args.save_mask:
+        os.makedirs(os.path.join(output_dir, 'mask'), exist_ok=True)
+
+    # Create resize transform
+    resize_transform = transforms.Compose([
+        transforms.Resize(RESOLUTION[0]),
+        transforms.CenterCrop(RESOLUTION[0]),
+    ])
     
     # List to store dataset entries
     dataset_entries = []
     
     print(f"Processing {len(image_ids)} images...")
     
-    for i, image_id in enumerate(image_ids):
-
+    for image_id in tqdm(image_ids):
         # Load image info
         image_info = coco.loadImgs(image_id)[0]
         file_name = image_info['file_name']
@@ -117,39 +105,47 @@ def main():
         # Use the first caption as prompt (or combine them)
         prompt = captions[0] if captions else "A photograph"
         
-        # Generate random patch locations
-        patch_count = np.random.randint(1, MAX_PATCHES + 1)
-        locations = (np.random.rand(patch_count, 2) * np.array(img.size)).astype(int)
-        
         # Create filenames
         filename = f"{image_id:08d}.jpg"
         
         # Process image
-        target_img = resize_image(img, RESOLUTION)
-        # patched_img = create_patched_image(img, PATCH_FRAC, locations)
-        sigma = np.random.randint(BLUR_SIGMA[0], BLUR_SIGMA[1] + 1)
-        blurred_img = create_patched_image_with_blur(target_img, PATCH_FRAC, locations, sigma)
+        target_img = resize_transform(img)
+
+        # Generate random patch mask
+        patch_count = np.random.randint(1, MAX_PATCHES + 1)
+        mask = create_mask(RESOLUTION, patch_count, PATCH_FRAC)
         
+        # Create blurred image
+        sigma = np.random.randint(BLUR_SIGMA[0], BLUR_SIGMA[1] + 1)
+        blurred_img = create_gaussian_blurred_image(target_img, sigma)
+
+        # Combine control
+        if args.combine_control:
+            source_img = combine_control(target_img, mask, blurred_img)
+        else:
+            source_img = blurred_img
+
         # Save images
         target_img_path = os.path.join(output_dir, 'target', filename)
-        # patched_img_path = os.path.join(output_dir, 'patched', filename)
-        blurred_img_path = os.path.join(output_dir, 'source', filename)
-        
+        source_img_path = os.path.join(output_dir, 'source', filename)
+
         target_img.save(target_img_path)
-        # patched_img.save(patched_img_path)
-        blurred_img.save(blurred_img_path)
-        
+        source_img.save(source_img_path)
+
+        if args.save_mask:
+            mask_path = os.path.join(output_dir, 'mask', filename)
+            mask.save(mask_path)
+
         # Create dataset entry
         entry = {
             "source": 'source/' + filename,
             "target": 'target/' + filename,
             "prompt": prompt
         }
+        if args.save_mask:
+            entry['mask'] = 'mask/' + filename
         dataset_entries.append(entry)
         
-        if (i + 1) % 100 == 0:
-            print(f"Processed {i + 1}/{len(image_ids)} images")
-    
     # Save dataset JSON file
     json_path = os.path.join(output_dir, 'prompt.json')
     with open(json_path, 'w') as f:
