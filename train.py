@@ -61,18 +61,19 @@ def main():
     model.learning_rate = learning_rate
     model.sd_locked = sd_locked
     model.only_mid_control = only_mid_control
+    model_type = "sd15" if "sd15" in model_path else "sd21"
 
     dataset = OutPaintDataset(dataset_path)
     dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=True)
     image_logger = ImageLogger(batch_frequency=1000 * accumulate_grad_batches)
     model_checkpoint1 = ModelCheckpoint(
         dirpath=checkpoints_dir,
-        filename='controlnet-patch-outpaint-last-{step}',
+        filename=f'controlnet-patch-outpaint-{model_type}-last-' + '{step}',
         every_n_train_steps=1000,
     )
     model_checkpoint2 = ModelCheckpoint(
         dirpath=checkpoints_dir,
-        filename='controlnet-patch-outpaint-{step}',
+        filename=f'controlnet-patch-outpaint-{model_type}-' + '{step}',
         save_top_k=-1,
         every_n_train_steps=10000,
     )
