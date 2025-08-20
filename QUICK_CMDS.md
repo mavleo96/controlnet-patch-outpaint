@@ -32,6 +32,7 @@ python ./scripts/create_coco_dataset.py --root /home/vmurugan/projects/controlne
 ```
 
 ## Prepare Checkpoint (ControlNet)
+#### Prepare Checkpoint (Stable Diffusion 1.5)
 ```
 # Local
 wget https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned.ckpt -O /data/vmurugan/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt
@@ -46,6 +47,16 @@ python tool_add_control.py \
     --input_path /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/v1-5-pruned.ckpt \
     --output_path /home/vmurugan/projects/controlnet-patch-outpaint/checkpoints/control_sd15_ini.ckpt \
     --model_path models/cldm_v15.yaml
+```
+
+#### Prepare Checkpoint (Stable Diffusion 2.1)
+```
+# Local
+wget https://huggingface.co/stabilityai/stable-diffusion-2-1-base/resolve/main/v2-1_512-ema-pruned.ckpt -O /data/vmurugan/controlnet-patch-outpaint/checkpoints/v2-1_512-ema-pruned.ckpt
+python tool_add_control.py \
+    --input_path /data/vmurugan/controlnet-patch-outpaint/checkpoints/v2-1_512-ema-pruned.ckpt \
+    --output_path /data/vmurugan/controlnet-patch-outpaint/checkpoints/control_sd21_ini.ckpt \
+    --model_path models/cldm_v21.yaml
 ```
 
 ## Train
