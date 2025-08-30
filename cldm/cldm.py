@@ -330,7 +330,7 @@ class ControlNetDinoV2(ControlNet):
             "facebook/dinov2-small": 384,
             "facebook/dinov2-base": 768,
             "facebook/dinov2-large": 1024,
-            "facebook/dinov2-huge": 1536,
+            "facebook/dinov2-giant": 1536,
         }[self.dinov2_model_name]
 
         # input_hint_block created in super().__init__() is overridden here
