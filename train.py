@@ -61,7 +61,7 @@ def main():
     model.learning_rate = learning_rate
     model.sd_locked = sd_locked
     model.only_mid_control = only_mid_control
-    model_type = "sd15" if "sd15" in model_path else "sd21"
+    model_type = "sd15" if "v15" in model_path else "sd21"
 
     dataset = OutPaintDataset(dataset_path)
     dataloader = DataLoader(dataset, num_workers=0, batch_size=batch_size, shuffle=True)
