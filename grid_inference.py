@@ -64,6 +64,18 @@ def sample_with_text_only(model, batch, N=1, ddim_steps=50, ddim_eta=0.0):
     return x_samples
 
 
+def create_pil_image(img):
+    if img.dim() > 3:
+        img = img[0]
+    
+    img = (img + 1.0) / 2.0
+    img = img.clamp(0, 1)
+    img = img.permute(1, 2, 0)
+    img = img.detach().cpu().numpy()
+    img = (img * 255).astype(np.uint8)
+    img = Image.fromarray(img)
+    return img
+
 def create_grid_image(all_images, n_samples, output_path):
     # Column headers
     headers = ["Text", "Control", "Reconstruction", "Text only (CFG=4)", "No text", "CFG=1", "CFG=4"]
@@ -75,12 +87,7 @@ def create_grid_image(all_images, n_samples, output_path):
     for row in range(n_samples):
         for col in range(7):
             img = all_images[col][row]
-            img = (img + 1.0) / 2.0
-            img = img.clamp(0, 1)
-            img = img.permute(1, 2, 0)
-            img = img.detach().cpu().numpy()
-            img = (img * 255).astype(np.uint8)
-            img = Image.fromarray(img)
+            img = create_pil_image(img)
             
             axes[row, col].imshow(img)
             axes[row, col].axis('off')
@@ -139,12 +146,12 @@ def main():
     DDIM_ETA = args.ddim_eta
 
     for batch_idx, batch in enumerate(dataloader):
-        if batch_idx >= args.n_samples:
+        if batch_idx >= args.n_samples / args.batch_size:
             break
             
         batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
         
-        print(f"Processing batch {batch_idx + 1}/{args.n_samples}")
+        print(f"Processing batch {batch_idx + 1}/{args.n_samples / args.batch_size}")
         
         # Generate all requested outputs
         with torch.no_grad():
