@@ -45,6 +45,30 @@ class ControlledUnetModel(UNetModel):
         h = h.type(x.dtype)
         return self.out(h)
 
+class ControlledUnetModelModified(UNetModel):
+    def forward(self, x, timesteps=None, context=None, control=None, only_mid_control=False, **kwargs):
+        hs = []
+        with torch.no_grad():
+            t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
+            emb = self.time_embed(t_emb)
+            h = x.type(self.dtype)
+            for module in self.input_blocks:
+                h = module(h, emb, context)
+                hs.append(h)
+            h = self.middle_block(h, emb, context)
+
+        if control is not None:
+            h = 0.5*h + 0.5*control.pop()
+
+        for i, module in enumerate(self.output_blocks):
+            if only_mid_control or control is None:
+                h = torch.cat([h, hs.pop()], dim=1)
+            else:
+                h = torch.cat([h, 0.5*hs.pop() + 0.5*control.pop()], dim=1)
+            h = module(h, emb, context)
+
+        h = h.type(x.dtype)
+        return self.out(h)
 
 class ControlNet(nn.Module):
     def __init__(
@@ -341,6 +365,32 @@ class ControlNetDinoV2(ControlNet):
             zero_module(conv_nd(dims=dims, in_channels=in_channels, out_channels=model_channels, kernel_size=1)),
         )
 
+class ControlNetModified(ControlNet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, x, hint, timesteps, context, **kwargs):
+        t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
+        emb = self.time_embed(t_emb)
+
+        guided_hint = self.input_hint_block(hint, emb, context)
+
+        outs = []
+
+        h = x.type(self.dtype)
+        for module in self.input_blocks:
+            if guided_hint is not None:
+                h = module(h, emb, context)
+                h += guided_hint
+                guided_hint = None
+            else:
+                h = module(h, emb, context)
+            outs.append(h)
+
+        h = self.middle_block(h, emb, context)
+        outs.append(h)
+
+        return outs
 
 class ControlLDM(LatentDiffusion):
 
