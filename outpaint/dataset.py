@@ -35,7 +35,7 @@ class OutPaintDataset(Dataset):
         # Normalize
         source = source.astype(np.float32) / 255.0              # [0, 1]
         target = (target.astype(np.float32) / 127.5) - 1.0      # [-1, 1]
-        return dict(jpg=target, txt=prompt, hint=source)
+        return dict(jpg=target, txt=prompt, hint=source, filename=source_filename.split('/')[-1])
 
 if __name__ == '__main__':
     dataset = OutPaintDataset('/data/vmurugan/datasets/test/train')
