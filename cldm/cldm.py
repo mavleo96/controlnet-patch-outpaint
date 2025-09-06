@@ -46,7 +46,7 @@ class ControlledUnetModel(UNetModel):
         return self.out(h)
 
 class ControlledUnetModelModified(UNetModel):
-    def forward(self, x, timesteps=None, context=None, control=None, only_mid_control=False, **kwargs):
+    def forward(self, x, timesteps=None, context=None, control=None, only_mid_control=False, lambda_control=0.5, **kwargs):
         hs = []
         with torch.no_grad():
             t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
@@ -58,13 +58,13 @@ class ControlledUnetModelModified(UNetModel):
             h = self.middle_block(h, emb, context)
 
         if control is not None:
-            h = 0.5*h + 0.5*control.pop()
+            h = (1-lambda_control)*h + lambda_control*control.pop()
 
         for i, module in enumerate(self.output_blocks):
             if only_mid_control or control is None:
                 h = torch.cat([h, hs.pop()], dim=1)
             else:
-                h = torch.cat([h, 0.5*hs.pop() + 0.5*control.pop()], dim=1)
+                h = torch.cat([h, (1-lambda_control)*hs.pop() + lambda_control*control.pop()], dim=1)
             h = module(h, emb, context)
 
         h = h.type(x.dtype)
@@ -412,7 +412,7 @@ class ControlLDM(LatentDiffusion):
         control = control.to(memory_format=torch.contiguous_format).float()
         return x, dict(c_crossattn=[c], c_concat=[control])
 
-    def apply_model(self, x_noisy, t, cond, *args, **kwargs):
+    def apply_model(self, x_noisy, t, cond, lambda_control=0.5, *args, **kwargs):
         assert isinstance(cond, dict)
         diffusion_model = self.model.diffusion_model
 
@@ -423,7 +423,7 @@ class ControlLDM(LatentDiffusion):
         else:
             control = self.control_model(x=x_noisy, hint=torch.cat(cond['c_concat'], 1), timesteps=t, context=cond_txt)
             control = [c * scale for c, scale in zip(control, self.control_scales)]
-            eps = diffusion_model(x=x_noisy, timesteps=t, context=cond_txt, control=control, only_mid_control=self.only_mid_control)
+            eps = diffusion_model(x=x_noisy, timesteps=t, context=cond_txt, control=control, only_mid_control=self.only_mid_control, lambda_control=lambda_control)
 
         return eps
 
@@ -493,11 +493,11 @@ class ControlLDM(LatentDiffusion):
         return log
 
     @torch.no_grad()
-    def sample_log(self, cond, batch_size, ddim, ddim_steps, **kwargs):
+    def sample_log(self, cond, batch_size, ddim, ddim_steps, lambda_control=0.5, **kwargs):
         ddim_sampler = DDIMSampler(self)
         b, c, h, w = cond["c_concat"][0].shape
         shape = (self.channels, h // 8, w // 8)
-        samples, intermediates = ddim_sampler.sample(ddim_steps, batch_size, shape, cond, verbose=False, **kwargs)
+        samples, intermediates = ddim_sampler.sample(ddim_steps, batch_size, shape, cond, verbose=False, lambda_control=lambda_control, **kwargs)
         return samples, intermediates
 
     def configure_optimizers(self):
