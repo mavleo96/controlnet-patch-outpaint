@@ -57,6 +57,7 @@ class DDIMSampler(object):
                batch_size,
                shape,
                conditioning=None,
+               lambda_control=0.5,
                callback=None,
                normals_sequence=None,
                img_callback=None,
@@ -101,6 +102,7 @@ class DDIMSampler(object):
         print(f'Data shape for DDIM sampling is {size}, eta {eta}')
 
         samples, intermediates = self.ddim_sampling(conditioning, size,
+                                                    lambda_control=lambda_control,
                                                     callback=callback,
                                                     img_callback=img_callback,
                                                     quantize_denoised=quantize_x0,
@@ -122,6 +124,7 @@ class DDIMSampler(object):
     @torch.no_grad()
     def ddim_sampling(self, cond, shape,
                       x_T=None, ddim_use_original_steps=False,
+                      lambda_control=0.5,
                       callback=None, timesteps=None, quantize_denoised=False,
                       mask=None, x0=None, img_callback=None, log_every_t=100,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
@@ -159,9 +162,14 @@ class DDIMSampler(object):
             if ucg_schedule is not None:
                 assert len(ucg_schedule) == len(time_range)
                 unconditional_guidance_scale = ucg_schedule[i]
+            
+            # decay of lambda_control: linear, sqrt, constant
+            # lambda_control_current = lambda_control * (1 - i / total_steps)
+            # lambda_control_current = lambda_control / (i + 1) ** 0.5
+            lambda_control_current = lambda_control
 
             outs = self.p_sample_ddim(img, cond, ts, index=index, use_original_steps=ddim_use_original_steps,
-                                      quantize_denoised=quantize_denoised, temperature=temperature,
+                                      lambda_control=lambda_control_current, quantize_denoised=quantize_denoised, temperature=temperature,
                                       noise_dropout=noise_dropout, score_corrector=score_corrector,
                                       corrector_kwargs=corrector_kwargs,
                                       unconditional_guidance_scale=unconditional_guidance_scale,
@@ -178,16 +186,16 @@ class DDIMSampler(object):
         return img, intermediates
 
     @torch.no_grad()
-    def p_sample_ddim(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
+    def p_sample_ddim(self, x, c, t, index, repeat_noise=False, use_original_steps=False, lambda_control=0.5, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
                       unconditional_guidance_scale=1., unconditional_conditioning=None,
                       dynamic_threshold=None):
         b, *_, device = *x.shape, x.device
 
         if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
-            model_output = self.model.apply_model(x, t, c)
+            model_output = self.model.apply_model(x, t, c, lambda_control=lambda_control)
         else:
-            model_t = self.model.apply_model(x, t, c)
+            model_t = self.model.apply_model(x, t, c, lambda_control=lambda_control)
             model_uncond = self.model.apply_model(x, t, unconditional_conditioning)
             model_output = model_uncond + unconditional_guidance_scale * (model_t - model_uncond)
 
@@ -198,7 +206,7 @@ class DDIMSampler(object):
 
         if score_corrector is not None:
             assert self.model.parameterization == "eps", 'not implemented'
-            e_t = score_corrector.modify_score(self.model, e_t, x, t, c, **corrector_kwargs)
+            e_t = score_corrector.modify_score(self.model, e_t, x, t, c, lambda_control=lambda_control, **corrector_kwargs)
 
         alphas = self.model.alphas_cumprod if use_original_steps else self.ddim_alphas
         alphas_prev = self.model.alphas_cumprod_prev if use_original_steps else self.ddim_alphas_prev
@@ -232,7 +240,7 @@ class DDIMSampler(object):
 
     @torch.no_grad()
     def encode(self, x0, c, t_enc, use_original_steps=False, return_intermediates=None,
-               unconditional_guidance_scale=1.0, unconditional_conditioning=None, callback=None):
+               unconditional_guidance_scale=1.0, unconditional_conditioning=None, callback=None, lambda_control=0.5):
         timesteps = np.arange(self.ddpm_num_timesteps) if use_original_steps else self.ddim_timesteps
         num_reference_steps = timesteps.shape[0]
 
@@ -252,12 +260,12 @@ class DDIMSampler(object):
         for i in tqdm(range(num_steps), desc='Encoding Image'):
             t = torch.full((x0.shape[0],), timesteps[i], device=self.model.device, dtype=torch.long)
             if unconditional_guidance_scale == 1.:
-                noise_pred = self.model.apply_model(x_next, t, c)
+                noise_pred = self.model.apply_model(x_next, t, c, lambda_control=lambda_control)
             else:
                 assert unconditional_conditioning is not None
                 e_t_uncond, noise_pred = torch.chunk(
                     self.model.apply_model(torch.cat((x_next, x_next)), torch.cat((t, t)),
-                                           torch.cat((unconditional_conditioning, c))), 2)
+                                           torch.cat((unconditional_conditioning, c)), lambda_control=lambda_control), 2)
                 noise_pred = e_t_uncond + unconditional_guidance_scale * (noise_pred - e_t_uncond)
 
             xt_weighted = (alphas_next[i] / alphas[i]).sqrt() * x_next
@@ -296,7 +304,7 @@ class DDIMSampler(object):
 
     @torch.no_grad()
     def decode(self, x_latent, cond, t_start, unconditional_guidance_scale=1.0, unconditional_conditioning=None,
-               use_original_steps=False, callback=None):
+               use_original_steps=False, callback=None, lambda_control=0.5):
 
         timesteps = np.arange(self.ddpm_num_timesteps) if use_original_steps else self.ddim_timesteps
         timesteps = timesteps[:t_start]
@@ -311,6 +319,7 @@ class DDIMSampler(object):
             index = total_steps - i - 1
             ts = torch.full((x_latent.shape[0],), step, device=x_latent.device, dtype=torch.long)
             x_dec, _ = self.p_sample_ddim(x_dec, cond, ts, index=index, use_original_steps=use_original_steps,
+                                          lambda_control=lambda_control,
                                           unconditional_guidance_scale=unconditional_guidance_scale,
                                           unconditional_conditioning=unconditional_conditioning)
             if callback: callback(i)
