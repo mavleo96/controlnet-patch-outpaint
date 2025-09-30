@@ -885,7 +885,9 @@ class LatentDiffusion(DDPM):
     def p_losses(self, x_start, cond, t, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-        model_output = self.apply_model(x_noisy, t, cond)
+        # TODO: temporary hack to enable training lambda control robustly
+        lambda_control = cond.get('lambda_control', np.random.rand())
+        model_output = self.apply_model(x_noisy, t, cond, lambda_control=lambda_control)
 
         loss_dict = {}
         prefix = 'train' if self.training else 'val'
